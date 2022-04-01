@@ -10,6 +10,8 @@ use winapi::{
     winrt::winstring::WindowsGetStringRawBuffer,
 };
 
+pub type RawPtr = *mut core::ffi::c_void;
+
 fn main() {
     let hr = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) };
     dbg!(hr);
@@ -37,7 +39,7 @@ fn main() {
     dbg!(class_name_str);
 
     //pump
-    let controller = create_dispatcher_queu_controller();
+    create_dispatcher_queu_controller();
 }
 
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
@@ -62,7 +64,7 @@ pub struct DispatcherQueueOptions {
 extern "system" {
     fn CreateDispatcherQueueController(
         options: DispatcherQueueOptions,
-        dispatcherqueuecontroller: *mut c_void,
+        dispatcherqueuecontroller: *mut RawPtr,
     ) -> HRESULT;
 }
 
@@ -74,6 +76,7 @@ fn create_dispatcher_queu_controller() {
     };
 
     let mut controller = null_mut();
-    let hr = unsafe { CreateDispatcherQueueController(options, controller) };
+    let hr = unsafe { CreateDispatcherQueueController(options, &mut controller) };
     dbg!(hr);
+    dbg!(controller);
 }
