@@ -1,16 +1,42 @@
-use core::ffi::c_void;
-use std::{
-    mem,
-    ptr::{self, null_mut},
-};
+use std::os::windows::prelude::*;
+use std::{ffi::OsString, fmt, mem, ptr};
 use widestring::U16String;
 use winapi::{
-    shared::winerror::HRESULT, um::combaseapi::CoInitializeEx, um::objbase::COINIT_MULTITHREADED,
-    winrt::roapi::RoActivateInstance, winrt::winstring::WindowsCreateString,
+    shared::{
+        minwindef::{BOOL, FALSE, LPARAM, TRUE},
+        windef::HWND,
+        winerror::{HRESULT, S_OK},
+    },
+    um::combaseapi::CoInitializeEx,
+    um::dwmapi::DwmGetWindowAttribute,
+    um::objbase::COINIT_MULTITHREADED,
+    um::{
+        dwmapi::{DWMWA_CLOAKED, DWM_CLOAKED_SHELL},
+        winuser::{
+            EnumWindows, GetAncestor, GetShellWindow, GetWindowLongA, GetWindowTextW,
+            IsWindowVisible, GA_ROOT, GWL_STYLE, WS_DISABLED,
+        },
+    },
+    winrt::roapi::RoActivateInstance,
+    winrt::winstring::WindowsCreateString,
     winrt::winstring::WindowsGetStringRawBuffer,
 };
 
 pub type RawPtr = *mut core::ffi::c_void;
+
+pub struct Window {
+    pub hwnd: HWND,
+    pub name: OsString,
+}
+
+impl fmt::Debug for Window {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Window")
+            .field("hwnd", &self.hwnd)
+            .field("name", &self.name)
+            .finish()
+    }
+}
 
 fn main() {
     let hr = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) };
@@ -40,6 +66,16 @@ fn main() {
 
     //pump
     create_dispatcher_queu_controller();
+
+    // enumerate windows
+    let mut windows = Vec::new();
+    unsafe {
+        EnumWindows(
+            Some(enum_window),
+            &mut windows as *mut Vec<Window> as LPARAM,
+        )
+    };
+    dbg!(windows);
 }
 
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
@@ -56,9 +92,9 @@ pub const DQTAT_COM_STA: DISPATCHERQUEUE_THREAD_APARTMENTTYPE =
 
 #[repr(C)]
 pub struct DispatcherQueueOptions {
-    pub dwSize: u32,
-    pub threadType: DISPATCHERQUEUE_THREAD_TYPE,
-    pub apartmentType: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,
+    pub dw_size: u32,
+    pub thread_type: DISPATCHERQUEUE_THREAD_TYPE,
+    pub apartment_type: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,
 }
 
 extern "system" {
@@ -70,13 +106,64 @@ extern "system" {
 
 fn create_dispatcher_queu_controller() {
     let options = DispatcherQueueOptions {
-        dwSize: mem::size_of::<DispatcherQueueOptions>() as u32,
-        threadType: DQTYPE_THREAD_CURRENT,
-        apartmentType: DQTAT_COM_STA,
+        dw_size: mem::size_of::<DispatcherQueueOptions>() as u32,
+        thread_type: DQTYPE_THREAD_CURRENT,
+        apartment_type: DQTAT_COM_STA,
     };
 
-    let mut controller = null_mut();
+    let mut controller = ptr::null_mut();
     let hr = unsafe { CreateDispatcherQueueController(options, &mut controller) };
     dbg!(hr);
     dbg!(controller);
+}
+
+extern "system" fn enum_window(handle: HWND, data: LPARAM) -> BOOL {
+    let shell_window = unsafe { GetShellWindow() };
+    if handle == shell_window {
+        return TRUE;
+    }
+    unsafe {
+        if IsWindowVisible(handle) == FALSE {
+            return TRUE;
+        }
+    }
+
+    unsafe {
+        if GetAncestor(handle, GA_ROOT) != handle {
+            return TRUE;
+        }
+    }
+
+    unsafe {
+        let style = GetWindowLongA(handle, GWL_STYLE) as u32;
+        if style & WS_DISABLED == WS_DISABLED {
+            return TRUE;
+        }
+    }
+
+    unsafe {
+        let mut cloaked: i32 = 0;
+        let ptr = &mut cloaked as *mut _ as *mut _;
+        let hr = DwmGetWindowAttribute(handle, DWMWA_CLOAKED, ptr, mem::size_of::<i32>() as u32);
+        if hr == S_OK && cloaked as u32 == DWM_CLOAKED_SHELL {
+            return TRUE;
+        }
+    }
+
+    unsafe {
+        let mut text: [u16; 512] = [0; 512];
+        let len = GetWindowTextW(handle, text.as_mut_ptr(), text.len() as i32);
+        if len == 0 {
+            return TRUE;
+        }
+        let text = OsString::from_wide(&text[..len as usize]);
+
+        let windows = &mut *(data as *mut Vec<Window>);
+        windows.push(Window {
+            hwnd: handle,
+            name: text,
+        });
+
+        return TRUE;
+    }
 }
