@@ -11,6 +11,15 @@ use winapi::{
     um::dwmapi::DwmGetWindowAttribute,
     um::objbase::COINIT_MULTITHREADED,
     um::{
+        d3d11::{
+            D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            D3D11_SDK_VERSION,
+        },
+        d3dcommon::{
+            D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_10_1,
+            D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_9_1,
+            D3D_FEATURE_LEVEL_9_2, D3D_FEATURE_LEVEL_9_3,
+        },
         dwmapi::{DWMWA_CLOAKED, DWM_CLOAKED_SHELL},
         winuser::{
             EnumWindows, GetAncestor, GetShellWindow, GetWindowLongA, GetWindowTextW,
@@ -37,6 +46,16 @@ impl fmt::Debug for Window {
             .finish()
     }
 }
+
+const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
+    D3D_FEATURE_LEVEL_11_1,
+    D3D_FEATURE_LEVEL_11_0,
+    D3D_FEATURE_LEVEL_10_1,
+    D3D_FEATURE_LEVEL_10_0,
+    D3D_FEATURE_LEVEL_9_3,
+    D3D_FEATURE_LEVEL_9_2,
+    D3D_FEATURE_LEVEL_9_1,
+];
 
 fn main() {
     let hr = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) };
@@ -76,6 +95,8 @@ fn main() {
         )
     };
     dbg!(windows);
+
+    let device = create_d3d_device().unwrap();
 }
 
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
@@ -115,6 +136,37 @@ fn create_dispatcher_queu_controller() {
     let hr = unsafe { CreateDispatcherQueueController(options, &mut controller) };
     dbg!(hr);
     dbg!(controller);
+}
+
+fn create_d3d_device() -> Option<&'static ID3D11Device> {
+    let levels = DIRECT3D_FEATURE_LEVELS;
+    let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    let driver_type = D3D_DRIVER_TYPE_HARDWARE;
+
+    let mut device = std::ptr::null_mut();
+    let mut context = std::ptr::null_mut();
+
+    let hr = unsafe {
+        D3D11CreateDevice(
+            std::ptr::null_mut(),
+            driver_type,
+            std::ptr::null_mut(),
+            flags,
+            levels.as_ptr(),
+            levels.len() as u32,
+            D3D11_SDK_VERSION,
+            &mut device,
+            std::ptr::null_mut(),
+            &mut context,
+        )
+    };
+
+    dbg!(hr);
+
+    match hr {
+     S_OK => Some(unsafe { device.as_ref().unwrap() }),
+     _ => None,
+    }
 }
 
 extern "system" fn enum_window(handle: HWND, data: LPARAM) -> BOOL {
