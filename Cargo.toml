@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[patch.crates-io]
+ari = { git = "https://github.com/discord/ari", branch = "remove-nightly-features" }
+
 [dependencies]
+ari = "0.0.5"
 winapi = { version = "0.3.7", features = ["combaseapi", "d3d11", "d3dcommon", "dwmapi", "objbase", "roapi", "winerror", "winstring", "winuser"] }
 widestring = {version = "0.5.1"}

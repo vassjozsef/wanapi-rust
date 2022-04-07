@@ -1,8 +1,10 @@
+use ari::os::win::ComPtr;
 use std::os::windows::prelude::*;
 use std::{ffi::OsString, fmt, mem, ptr};
 use widestring::U16String;
 use winapi::{
     shared::{
+        dxgi::IDXGIDevice,
         minwindef::{BOOL, FALSE, LPARAM, TRUE},
         windef::HWND,
         winerror::{HRESULT, S_OK},
@@ -12,8 +14,7 @@ use winapi::{
     um::objbase::COINIT_MULTITHREADED,
     um::{
         d3d11::{
-            D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-            D3D11_SDK_VERSION,
+            D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
         },
         d3dcommon::{
             D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_10_1,
@@ -30,6 +31,8 @@ use winapi::{
     winrt::winstring::WindowsCreateString,
     winrt::winstring::WindowsGetStringRawBuffer,
 };
+
+mod error;
 
 pub type RawPtr = *mut core::ffi::c_void;
 
@@ -57,7 +60,7 @@ const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
     D3D_FEATURE_LEVEL_9_1,
 ];
 
-fn main() {
+fn main() -> Result<(), error::AppError> {
     let hr = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) };
     dbg!(hr);
 
@@ -96,7 +99,10 @@ fn main() {
     };
     dbg!(windows);
 
-    let device = create_d3d_device().unwrap();
+    let device = create_d3d_device()?;
+    let dxgi_device = device.query::<IDXGIDevice>()?;
+
+    Ok(())
 }
 
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
@@ -138,7 +144,7 @@ fn create_dispatcher_queu_controller() {
     dbg!(controller);
 }
 
-fn create_d3d_device() -> Option<&'static ID3D11Device> {
+fn create_d3d_device() -> Result<ComPtr<ID3D11Device>, error::AppError> {
     let levels = DIRECT3D_FEATURE_LEVELS;
     let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     let driver_type = D3D_DRIVER_TYPE_HARDWARE;
@@ -161,11 +167,11 @@ fn create_d3d_device() -> Option<&'static ID3D11Device> {
         )
     };
 
-    dbg!(hr);
+    let device = unsafe { ComPtr::new(device) };
 
     match hr {
-     S_OK => Some(unsafe { device.as_ref().unwrap() }),
-     _ => None,
+        S_OK => Ok(device),
+        _ => Err(error::AppError::DeviceCreateFailed),
     }
 }
 
