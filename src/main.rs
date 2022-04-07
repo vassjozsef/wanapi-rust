@@ -32,8 +32,6 @@ use winapi::{
     winrt::winstring::WindowsGetStringRawBuffer,
 };
 
-mod error;
-
 pub type RawPtr = *mut core::ffi::c_void;
 
 pub struct Window {
@@ -60,7 +58,7 @@ const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
     D3D_FEATURE_LEVEL_9_1,
 ];
 
-fn main() -> Result<(), error::AppError> {
+fn main() -> Result<(), i32> {
     let hr = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) };
     dbg!(hr);
 
@@ -87,16 +85,19 @@ fn main() -> Result<(), error::AppError> {
     dbg!(class_name_str);
 
     //pump
-    create_dispatcher_queu_controller();
+    create_dispatcher_queu_controller()?;
 
     // enumerate windows
     let mut windows = Vec::new();
-    unsafe {
+    let res = unsafe {
         EnumWindows(
             Some(enum_window),
             &mut windows as *mut Vec<Window> as LPARAM,
         )
     };
+    if res == FALSE {
+        return Err(-1);
+    }
     dbg!(windows);
 
     let device = create_d3d_device()?;
@@ -131,7 +132,7 @@ extern "system" {
     ) -> HRESULT;
 }
 
-fn create_dispatcher_queu_controller() {
+fn create_dispatcher_queu_controller() -> Result<(), i32> {
     let options = DispatcherQueueOptions {
         dw_size: mem::size_of::<DispatcherQueueOptions>() as u32,
         thread_type: DQTYPE_THREAD_CURRENT,
@@ -142,9 +143,13 @@ fn create_dispatcher_queu_controller() {
     let hr = unsafe { CreateDispatcherQueueController(options, &mut controller) };
     dbg!(hr);
     dbg!(controller);
+    match hr {
+        S_OK => Ok(()),
+        error => Err(error),
+    }
 }
 
-fn create_d3d_device() -> Result<ComPtr<ID3D11Device>, error::AppError> {
+fn create_d3d_device() -> Result<ComPtr<ID3D11Device>, i32> {
     let levels = DIRECT3D_FEATURE_LEVELS;
     let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     let driver_type = D3D_DRIVER_TYPE_HARDWARE;
@@ -167,11 +172,13 @@ fn create_d3d_device() -> Result<ComPtr<ID3D11Device>, error::AppError> {
         )
     };
 
+    dbg!(hr);
+
     let device = unsafe { ComPtr::new(device) };
 
     match hr {
         S_OK => Ok(device),
-        _ => Err(error::AppError::DeviceCreateFailed),
+        error => Err(error),
     }
 }
 
