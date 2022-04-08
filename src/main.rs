@@ -27,9 +27,11 @@ use winapi::{
             IsWindowVisible, GA_ROOT, GWL_STYLE, WS_DISABLED,
         },
     },
-    winrt::roapi::RoActivateInstance,
-    winrt::winstring::WindowsCreateString,
-    winrt::winstring::WindowsGetStringRawBuffer,
+    winrt::{
+        inspectable::IInspectable,
+        roapi::RoActivateInstance,
+        winstring::{WindowsCreateString, WindowsGetStringRawBuffer},
+    },
 };
 
 pub type RawPtr = *mut core::ffi::c_void;
@@ -69,20 +71,8 @@ fn main() -> Result<(), i32> {
     let mut instance = ptr::null_mut();
     let hr = unsafe { RoActivateInstance(hstr, &mut instance) };
     dbg!(hr);
-    let mut class_name = ptr::null_mut();
-    let hr = unsafe {
-        instance
-            .as_ref()
-            .unwrap()
-            .GetRuntimeClassName(&mut class_name)
-    };
-    dbg!(hr);
-    let mut class_name_str_len = 0;
-    let class_name_str_ptr =
-        unsafe { WindowsGetStringRawBuffer(class_name, &mut class_name_str_len) };
-    let class_name_str =
-        unsafe { U16String::from_ptr(class_name_str_ptr, class_name_str_len as usize) };
-    dbg!(class_name_str);
+    let string_map = unsafe { instance.as_ref().unwrap() };
+    print_runtime_class_name(string_map);
 
     //pump
     create_dispatcher_queu_controller()?;
@@ -102,8 +92,30 @@ fn main() -> Result<(), i32> {
 
     let device = create_d3d_device()?;
     let dxgi_device = device.query::<IDXGIDevice>()?;
+    let mut instance = std::ptr::null_mut();
+    let hr = unsafe {
+        CreateDirect3D11DeviceFromDXGIDevice(dxgi_device.as_mut_ptr() as RawPtr, &mut instance)
+    };
+    if hr != S_OK {
+        return Err(hr);
+    }
+    let direct3d_device = unsafe { instance.as_ref().unwrap() };
+
+    print_runtime_class_name(direct3d_device);
 
     Ok(())
+}
+
+fn print_runtime_class_name(class: &IInspectable) {
+    let mut class_name = ptr::null_mut();
+    let hr = unsafe { class.GetRuntimeClassName(&mut class_name) };
+    dbg!(hr);
+    let mut class_name_str_len = 0;
+    let class_name_str_ptr =
+        unsafe { WindowsGetStringRawBuffer(class_name, &mut class_name_str_len) };
+    let class_name_str =
+        unsafe { U16String::from_ptr(class_name_str_ptr, class_name_str_len as usize) };
+    dbg!(class_name_str);
 }
 
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
@@ -128,7 +140,15 @@ pub struct DispatcherQueueOptions {
 extern "system" {
     fn CreateDispatcherQueueController(
         options: DispatcherQueueOptions,
+        // TODO: Actually return a pointer to DispatcherQueueController
         dispatcherqueuecontroller: *mut RawPtr,
+    ) -> HRESULT;
+}
+
+extern "system" {
+    fn CreateDirect3D11DeviceFromDXGIDevice(
+        dxgidevice: RawPtr,
+        graphicsdevice: *mut *mut IInspectable,
     ) -> HRESULT;
 }
 
