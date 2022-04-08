@@ -1,4 +1,8 @@
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
 use ari::os::win::ComPtr;
+use dispatcher::IDispatcherQueueController;
 use std::os::windows::prelude::*;
 use std::{ffi::OsString, fmt, mem, ptr};
 use widestring::U16String;
@@ -35,6 +39,8 @@ use winapi::{
 };
 
 pub type RawPtr = *mut core::ffi::c_void;
+
+mod dispatcher;
 
 pub struct Window {
     pub hwnd: HWND,
@@ -75,7 +81,9 @@ fn main() -> Result<(), i32> {
     print_runtime_class_name(string_map);
 
     //pump
-    create_dispatcher_queu_controller()?;
+    let controller = create_dispatcher_queu_controller()?;
+    print_runtime_class_name(&controller);
+    let _queue = unsafe { controller.DispatcherQueue() };
 
     // enumerate windows
     let mut windows = Vec::new();
@@ -118,10 +126,12 @@ fn print_runtime_class_name(class: &IInspectable) {
     dbg!(class_name_str);
 }
 
+#[repr(C)]
 pub struct DISPATCHERQUEUE_THREAD_TYPE(pub i32);
 pub const DQTYPE_THREAD_DEDICATED: DISPATCHERQUEUE_THREAD_TYPE = DISPATCHERQUEUE_THREAD_TYPE(1i32);
 pub const DQTYPE_THREAD_CURRENT: DISPATCHERQUEUE_THREAD_TYPE = DISPATCHERQUEUE_THREAD_TYPE(2i32);
 
+#[repr(C)]
 pub struct DISPATCHERQUEUE_THREAD_APARTMENTTYPE(pub i32);
 pub const DQTAT_COM_NONE: DISPATCHERQUEUE_THREAD_APARTMENTTYPE =
     DISPATCHERQUEUE_THREAD_APARTMENTTYPE(0i32);
@@ -141,7 +151,7 @@ extern "system" {
     fn CreateDispatcherQueueController(
         options: DispatcherQueueOptions,
         // TODO: Actually return a pointer to DispatcherQueueController
-        dispatcherqueuecontroller: *mut RawPtr,
+        dispatcherqueuecontroller: *mut *mut IDispatcherQueueController,
     ) -> HRESULT;
 }
 
@@ -152,7 +162,7 @@ extern "system" {
     ) -> HRESULT;
 }
 
-fn create_dispatcher_queu_controller() -> Result<(), i32> {
+fn create_dispatcher_queu_controller() -> Result<&'static IDispatcherQueueController, i32> {
     let options = DispatcherQueueOptions {
         dw_size: mem::size_of::<DispatcherQueueOptions>() as u32,
         thread_type: DQTYPE_THREAD_CURRENT,
@@ -164,7 +174,7 @@ fn create_dispatcher_queu_controller() -> Result<(), i32> {
     dbg!(hr);
     dbg!(controller);
     match hr {
-        S_OK => Ok(()),
+        S_OK => Ok(unsafe { controller.as_ref().unwrap() }),
         error => Err(error),
     }
 }
