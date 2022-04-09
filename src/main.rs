@@ -61,7 +61,7 @@ const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
 fn main() -> Result<(), i32> {
     WinResult::from(unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) })?;
 
-    let name = to_hstring("Windows.Foundation.Collections.StringMap".to_string())?;
+    let name = to_hstring("Windows.Foundation.Collections.StringMap")?;
     let mut instance = ptr::null_mut();
     WinResult::from(unsafe { RoActivateInstance(name, &mut instance) })?;
     let string_map = unsafe { instance.as_ref().unwrap() };
@@ -86,7 +86,7 @@ fn main() -> Result<(), i32> {
     dbg!(&windows);
 
     // create GrpahicsCaptureItem
-    let name = to_hstring("Windows.Graphics.Capture.GraphicsCaptureItem".to_string())?;
+    let name = to_hstring("Windows.Graphics.Capture.GraphicsCaptureItem")?;
     let mut ptr = std::ptr::null_mut();
     WinResult::from(unsafe {
         RoGetActivationFactory(name, &IGraphicsCaptureItemInterop::uuidof(), &mut ptr)

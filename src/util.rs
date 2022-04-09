@@ -14,7 +14,7 @@ impl WinResult {
     }
 }
 
-pub fn to_hstring(value: String) -> Result<HSTRING, i32> {
+pub fn to_hstring(value: &str) -> Result<HSTRING, i32> {
     let mut name = U16String::from(value);
     let mut hstr = std::ptr::null_mut();
     WinResult::from(unsafe {
