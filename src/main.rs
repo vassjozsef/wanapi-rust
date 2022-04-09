@@ -1,7 +1,8 @@
 use ari::os::win::ComPtr;
 use std::os::windows::prelude::*;
-use std::{ffi::OsString, fmt, mem, ptr};
-use widestring::U16String;
+use std::{ffi::OsString, mem, ptr};
+use winapi::winrt::roapi::RoGetActivationFactory;
+use winapi::Interface;
 use winapi::{
     shared::{
         dxgi::IDXGIDevice,
@@ -27,36 +28,24 @@ use winapi::{
             IsWindowVisible, GA_ROOT, GWL_STYLE, WS_DISABLED,
         },
     },
-    winrt::{
-        inspectable::IInspectable,
-        roapi::RoActivateInstance,
-        winstring::{WindowsCreateString, WindowsGetStringRawBuffer},
-    },
+    winrt::{inspectable::IInspectable, roapi::RoActivateInstance},
 };
 
 use crate::dispatcher::{
     CreateDispatcherQueueController, DispatcherQueueOptions, IDispatcherQueueController,
     DQTAT_COM_STA, DQTYPE_THREAD_CURRENT,
 };
-use crate::util::WinResult;
-
-pub type RawPtr = *mut core::ffi::c_void;
+use crate::graphics::{IGraphicsCaptureItem, IGraphicsCaptureItemInterop, SizeInt32};
+use crate::util::{from_hstring, print_runtime_class_name, to_hstring, WinResult};
 
 mod dispatcher;
+mod graphics;
 mod util;
 
+#[derive(Debug, Clone)]
 pub struct Window {
     pub hwnd: HWND,
     pub name: OsString,
-}
-
-impl fmt::Debug for Window {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Window")
-            .field("hwnd", &self.hwnd)
-            .field("name", &self.name)
-            .finish()
-    }
 }
 
 const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
@@ -72,23 +61,19 @@ const DIRECT3D_FEATURE_LEVELS: &[u32] = &[
 fn main() -> Result<(), i32> {
     WinResult::from(unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_MULTITHREADED) })?;
 
-    let mut name = U16String::from("Windows.Foundation.Collections.StringMap");
-    let mut hstr = ptr::null_mut();
-    WinResult::from(unsafe {
-        WindowsCreateString(name.as_mut_ptr(), name.len() as u32, &mut hstr)
-    })?;
+    let name = to_hstring("Windows.Foundation.Collections.StringMap".to_string())?;
     let mut instance = ptr::null_mut();
-    WinResult::from(unsafe { RoActivateInstance(hstr, &mut instance) })?;
+    WinResult::from(unsafe { RoActivateInstance(name, &mut instance) })?;
     let string_map = unsafe { instance.as_ref().unwrap() };
     print_runtime_class_name(string_map);
 
-    //pump
+    // create IDispatcherQueue
     let controller = create_dispatcher_queu_controller()?;
     print_runtime_class_name(&controller);
     let _queue = unsafe { controller.DispatcherQueue() };
 
     // enumerate windows
-    let mut windows = Vec::new();
+    let mut windows: Vec<Window> = Vec::new();
     let res = unsafe {
         EnumWindows(
             Some(enum_window),
@@ -98,13 +83,44 @@ fn main() -> Result<(), i32> {
     if res == FALSE {
         return Err(-1);
     }
-    dbg!(windows);
+    dbg!(&windows);
 
+    // create GrpahicsCaptureItem
+    let name = to_hstring("Windows.Graphics.Capture.GraphicsCaptureItem".to_string())?;
+    let mut ptr = std::ptr::null_mut();
+    WinResult::from(unsafe {
+        RoGetActivationFactory(name, &IGraphicsCaptureItemInterop::uuidof(), &mut ptr)
+    })?;
+    let interop = unsafe { (ptr as *mut IGraphicsCaptureItemInterop).as_ref().unwrap() };
+
+    let mut ptr = ptr::null_mut();
+    let hwnd = windows[2].hwnd;
+    dbg!(hwnd);
+    WinResult::from(unsafe {
+        interop.CreateForWindow(hwnd, &IGraphicsCaptureItem::uuidof(), &mut ptr)
+    })?;
+    let item = unsafe { (ptr as *mut IGraphicsCaptureItem).as_ref().unwrap() };
+    print_runtime_class_name(item);
+
+    let mut name = std::ptr::null_mut();
+    WinResult::from(unsafe { item.DisplayName(&mut name) })?;
+    dbg!(from_hstring(name));
+    let mut size = SizeInt32 {
+        Width: 0,
+        Height: 0,
+    };
+    WinResult::from(unsafe { item.Size(&mut size) })?;
+    dbg!(size);
+
+    // create IDirectD3Device
     let device = create_d3d_device()?;
     let dxgi_device = device.query::<IDXGIDevice>()?;
     let mut instance = std::ptr::null_mut();
     WinResult::from(unsafe {
-        CreateDirect3D11DeviceFromDXGIDevice(dxgi_device.as_mut_ptr() as RawPtr, &mut instance)
+        CreateDirect3D11DeviceFromDXGIDevice(
+            dxgi_device.as_mut_ptr() as *mut core::ffi::c_void,
+            &mut instance,
+        )
     })?;
     let direct3d_device = unsafe { instance.as_ref().unwrap() };
 
@@ -113,23 +129,9 @@ fn main() -> Result<(), i32> {
     Ok(())
 }
 
-fn print_runtime_class_name(class: &IInspectable) {
-    let mut class_name = ptr::null_mut();
-    let hr = unsafe { class.GetRuntimeClassName(&mut class_name) };
-    if hr != S_OK {
-        println!("Runtime class name is unavailable");
-    }
-    let mut class_name_str_len = 0;
-    let class_name_str_ptr =
-        unsafe { WindowsGetStringRawBuffer(class_name, &mut class_name_str_len) };
-    let class_name_str =
-        unsafe { U16String::from_ptr(class_name_str_ptr, class_name_str_len as usize) };
-    println!("{:?}", class_name_str);
-}
-
 extern "system" {
     fn CreateDirect3D11DeviceFromDXGIDevice(
-        dxgidevice: RawPtr,
+        dxgidevice: *mut core::ffi::c_void,
         graphicsdevice: *mut *mut IInspectable,
     ) -> HRESULT;
 }
