@@ -68,7 +68,7 @@ fn main() -> Result<(), i32> {
     print_runtime_class_name(string_map);
 
     // create IDispatcherQueue
-    let controller = create_dispatcher_queu_controller()?;
+    let controller = create_dispatcher_queue_controller()?;
     print_runtime_class_name(&controller);
     let _queue = unsafe { controller.DispatcherQueue() };
 
@@ -123,7 +123,6 @@ fn main() -> Result<(), i32> {
         )
     })?;
     let direct3d_device = unsafe { instance.as_ref().unwrap() };
-
     print_runtime_class_name(direct3d_device);
 
     Ok(())
@@ -136,7 +135,7 @@ extern "system" {
     ) -> HRESULT;
 }
 
-fn create_dispatcher_queu_controller() -> Result<ComPtr<IDispatcherQueueController>, i32> {
+fn create_dispatcher_queue_controller() -> Result<ComPtr<IDispatcherQueueController>, i32> {
     let options = DispatcherQueueOptions {
         dw_size: mem::size_of::<DispatcherQueueOptions>() as u32,
         thread_type: DQTYPE_THREAD_CURRENT,
