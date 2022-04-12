@@ -36,8 +36,8 @@ use crate::dispatcher::{
     DQTAT_COM_STA, DQTYPE_THREAD_CURRENT,
 };
 use crate::graphics::{
-    B8G8R8A8UIntNormalized, IDirect3D11CaptureFramePoolStatics, IGraphicsCaptureItem,
-    IGraphicsCaptureItemInterop, SizeInt32,
+    B8G8R8A8UIntNormalized, IDirect3D11CaptureFramePool, IDirect3D11CaptureFramePoolStatics,
+    IGraphicsCaptureItem, IGraphicsCaptureItemInterop, IGraphicsCaptureSession, SizeInt32,
 };
 use crate::util::{from_hstring, print_runtime_class_name, to_hstring, WinResult};
 
@@ -96,13 +96,13 @@ fn main() -> Result<(), i32> {
     })?;
     let interop = unsafe { (ptr as *mut IGraphicsCaptureItemInterop).as_ref().unwrap() };
 
-    let mut ptr = ptr::null_mut();
-    let hwnd = windows[2].hwnd;
+    let mut ptr_item = ptr::null_mut();
+    let hwnd = windows[1].hwnd;
     dbg!(hwnd);
     WinResult::from(unsafe {
-        interop.CreateForWindow(hwnd, &IGraphicsCaptureItem::uuidof(), &mut ptr)
+        interop.CreateForWindow(hwnd, &IGraphicsCaptureItem::uuidof(), &mut ptr_item)
     })?;
-    let item = unsafe { (ptr as *mut IGraphicsCaptureItem).as_ref().unwrap() };
+    let item = unsafe { (ptr_item as *mut IGraphicsCaptureItem).as_ref().unwrap() };
     print_runtime_class_name(item);
 
     let mut name = std::ptr::null_mut();
@@ -146,9 +146,19 @@ fn main() -> Result<(), i32> {
     print_runtime_class_name(pool_static);
 
     let mut ptr = std::ptr::null_mut();
+    let ptr_device = instance as *mut std::ffi::c_void;
     WinResult::from(unsafe {
-        pool_static.Create(instance, B8G8R8A8UIntNormalized, 2, size, &mut ptr)
+        pool_static.Create(ptr_device, B8G8R8A8UIntNormalized, 2, size, &mut ptr)
     })?;
+    let frame_pool = unsafe { (ptr as *mut IDirect3D11CaptureFramePool).as_ref().unwrap() };
+    print_runtime_class_name(frame_pool);
+
+    let mut ptr = std::ptr::null_mut();
+    // returns E_INVALIDARG (0x0x80070057)
+    WinResult::from(unsafe { frame_pool.CreateCaptureSession(ptr_item, &mut ptr) })?;
+    let session = unsafe { (ptr as *mut IGraphicsCaptureSession).as_ref().unwrap() };
+
+    WinResult::from(unsafe { session.StartCapture() })?;
 
     Ok(())
 }

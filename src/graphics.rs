@@ -35,11 +35,15 @@ pub const B8G8R8A8UIntNormalized: DirectXPixelFormat = DirectXPixelFormat(87i32)
 
 RIDL! {#[uuid(0x7784056a, 0x67aa, 0x4d53, 0xae, 0x54, 0x10, 0x88, 0xd5, 0xa8, 0xca, 0x21)]
     interface IDirect3D11CaptureFramePoolStatics(IDirect3D11CaptureFramePoolStatics_Vtbl): IInspectable(IInspectableVtbl) {
-        fn Create(device: *mut IInspectable, pixelformat: DirectXPixelFormat, numberofbuffers: i32, size: SizeInt32, result: *mut  *mut core::ffi::c_void,) -> HRESULT,
+        fn Create(device: *mut core::ffi::c_void, pixelformat: DirectXPixelFormat, numberofbuffers: i32, size: SizeInt32, result: *mut  *mut core::ffi::c_void,) -> HRESULT,
 }}
 
 RIDL! {#[uuid(0x24eb6d22, 0x1975, 0x422e, 0x82, 0xe7, 0x78, 0x0d, 0xbd, 0x8d, 0xdf, 0x24)]
     interface IDirect3D11CaptureFramePool(IDirect3D11CaptureFramePool_Vtbl): IInspectable(IInspectableVtbl) {
         fn CreateCaptureSession(item: *mut core::ffi::c_void, result: *mut *mut core::ffi::c_void,) -> HRESULT,
-    }
-}
+}}
+
+RIDL! {#[uuid(0x814e42a9, 0xf70f, 0x4ad7, 0x93, 0x9b, 0xfd, 0xdc, 0xc6, 0xeb, 0x88, 0x0d)]
+    interface IGraphicsCaptureSession(IGraphicsCaptureSession_Vtbl): IInspectable(IInspectableVtbl) {
+      fn StartCapture() -> HRESULT,
+}}
