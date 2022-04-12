@@ -35,7 +35,10 @@ use crate::dispatcher::{
     CreateDispatcherQueueController, DispatcherQueueOptions, IDispatcherQueueController,
     DQTAT_COM_STA, DQTYPE_THREAD_CURRENT,
 };
-use crate::graphics::{IGraphicsCaptureItem, IGraphicsCaptureItemInterop, SizeInt32};
+use crate::graphics::{
+    B8G8R8A8UIntNormalized, IDirect3D11CaptureFramePoolStatics, IGraphicsCaptureItem,
+    IGraphicsCaptureItemInterop, SizeInt32,
+};
 use crate::util::{from_hstring, print_runtime_class_name, to_hstring, WinResult};
 
 mod dispatcher;
@@ -110,7 +113,7 @@ fn main() -> Result<(), i32> {
         Height: 0,
     };
     WinResult::from(unsafe { item.Size(&mut size) })?;
-    dbg!(size);
+    dbg!(&size);
 
     // create IDirectD3Device
     let device = create_d3d_device()?;
@@ -124,6 +127,28 @@ fn main() -> Result<(), i32> {
     })?;
     let direct3d_device = unsafe { instance.as_ref().unwrap() };
     print_runtime_class_name(direct3d_device);
+
+    // start capture
+    let name = to_hstring("Windows.Graphics.Capture.Direct3D11CaptureFramePool")?;
+    let mut ptr = std::ptr::null_mut();
+    WinResult::from(unsafe {
+        RoGetActivationFactory(
+            name,
+            &IDirect3D11CaptureFramePoolStatics::uuidof(),
+            &mut ptr,
+        )
+    })?;
+    let pool_static = unsafe {
+        (ptr as *mut IDirect3D11CaptureFramePoolStatics)
+            .as_ref()
+            .unwrap()
+    };
+    print_runtime_class_name(pool_static);
+
+    let mut ptr = std::ptr::null_mut();
+    WinResult::from(unsafe {
+        pool_static.Create(instance, B8G8R8A8UIntNormalized, 2, size, &mut ptr)
+    })?;
 
     Ok(())
 }
